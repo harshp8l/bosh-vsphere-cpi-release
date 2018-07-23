@@ -61,7 +61,7 @@ module VSphereCloud
     end
 
     describe '#upload_file_to_datastore' do
-      let(:upload_contents) {"fake uplóad contents"}
+      let(:upload_contents) {"fake upload contents"}
       it 'uploads specified file' do
         response = double('response', code: 200, body: nil)
         expect(http_client).to receive(:put).with(

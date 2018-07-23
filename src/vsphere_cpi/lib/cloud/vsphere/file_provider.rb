@@ -4,18 +4,28 @@ module VSphereCloud
   class FileProvider
     include Logger
 
-    def initialize(http_client:, vcenter_host:, retryer: nil)
+    def initialize(http_client:, vcenter_host:, client:, retryer: nil)
+      @client = client
       @vcenter_host = vcenter_host
       @http_client = http_client
       @retryer = retryer || Retryer.new
     end
 
-    def fetch_file_from_datastore(datacenter_name, datastore_name, path)
-      url ="https://#{@vcenter_host}/folder/#{path}?dcPath=#{URI.escape(datacenter_name)}" +
-        "&dsName=#{URI.escape(datastore_name)}"
+    def fetch_file_from_datastore(datacenter_name, datastore, path)
+      # get the first host which is healthy
+      host = datastore.host.detect do |host_mount|
+        host = host_mount.key
+        !host.runtime.in_maintenance_mode && host.runtime.power_state == 'poweredOn' && host.runtime.connection_state = 'connected'
+      end.key
+
+      url = "https://#{host.name}/folder/#{path}?" +
+        "dsName=#{URI.escape(datastore.name)}"
+
+      service_ticket = get_generic_service_ticket(url: url, method: 'httpGet')
+
 
       logger.info("Fetching file from #{url}...")
-      response = do_request(request_type: 'GET', url: url, allow_not_found: true)
+      response = do_request(request_type: 'GET', url: url, allow_not_found: true, headers: {'Content-Type' => 'application/octet-stream', 'Cookie' => "vmware_cgi_ticket=#{service_ticket.id}"})
 
       if response.nil?
         logger.info("Could not find file at #{url}.")
@@ -26,13 +36,22 @@ module VSphereCloud
       end
     end
 
-    def upload_file_to_datastore(datacenter_name, datastore_name, path, contents)
-      url = "https://#{@vcenter_host}/folder/#{path}?dcPath=#{URI.escape(datacenter_name)}" +
-        "&dsName=#{URI.escape(datastore_name)}"
+    def upload_file_to_datastore(datastore, path, contents)
+      # get the first host which is healthy
+      host = datastore.mob.host.detect do |host_mount|
+        host = host_mount.key
+        !host.runtime.in_maintenance_mode && host.runtime.power_state == 'poweredOn' && host.runtime.connection_state = 'connected'
+      end.key
+
+      url = "https://#{host.name}/folder/#{path}?" +
+        "dsName=#{URI.escape(datastore.name)}"
+
+      service_ticket = get_generic_service_ticket(url: url, method: 'httpPut')
+
       logger.info("Uploading file to #{url}...")
 
       do_request(request_type: 'PUT', url: url, body: contents,
-        headers: { 'Content-Type' => 'application/octet-stream' })
+        headers: { 'Content-Type' => 'application/octet-stream', 'Cookie' => "vmware_cgi_ticket=#{service_ticket.id}"})
       logger.info('Successfully uploaded file.')
     end
 
@@ -44,6 +63,16 @@ module VSphereCloud
     end
 
     private
+
+    def get_generic_service_ticket(url:, method:)
+      session_manager = @client.service_content.session_manager
+      session_spec = VimSdk::Vim::SessionManager::HttpServiceRequestSpec.new
+      session_spec.method = method
+      session_spec.url = url
+
+      logger.info("Acquiring generic service ticket for URL: #{url} and Method: #{method}")
+      session_manager.acquire_generic_service_ticket(session_spec)
+    end
 
     def do_request(request_type:, url:, body: nil, headers: {}, allow_not_found: false)
       base_headers = {}

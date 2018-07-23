@@ -77,6 +77,7 @@ module VSphereCloud
         cluster_provider: @cluster_provider
       )
       @file_provider = FileProvider.new(
+        client: @client,
         http_client: @http_client,
         vcenter_host: @config.vcenter_host
       )
