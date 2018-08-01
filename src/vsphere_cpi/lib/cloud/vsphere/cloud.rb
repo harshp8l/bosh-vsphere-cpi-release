@@ -207,7 +207,10 @@ module VSphereCloud
               nic_config = Resources::VM.create_delete_device_spec(nic)
               config.device_change << nic_config
             end
+
             client.reconfig_vm(vm, config)
+
+            client.encrypt_vm(vm, @config.pbm_api_uri ) #encrypt vm
 
             logger.info('Taking initial snapshot')
 
