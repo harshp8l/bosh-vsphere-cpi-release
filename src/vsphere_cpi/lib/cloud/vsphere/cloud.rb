@@ -777,21 +777,21 @@ module VSphereCloud
       info.entity
     end
 
-    def get_vm_env_datastore_name(vm)
+    def get_vm_env_datastore(vm)
       cdrom = @client.get_cdrom_device(vm.mob)
-      cdrom.backing.datastore.name
+      vm.accessible_datastores[cdrom.backing.datastore.name]
     end
 
     def add_disk_to_agent_env(vm, director_disk_cid, device_unit_number)
       env = @agent_env.get_current_env(vm.mob, @datacenter.name)
       env['disks']['persistent'][director_disk_cid.raw] = device_unit_number.to_s
-      location = { datacenter: @datacenter.name, datastore: get_vm_env_datastore_name(vm), vm: vm.cid }
+      location = { datacenter: @datacenter.name, datastore: get_vm_env_datastore(vm), vm: vm.cid }
       @agent_env.set_env(vm.mob, location, env)
     end
 
     def delete_disk_from_agent_env(vm, director_disk_cid)
       env = @agent_env.get_current_env(vm.mob, @datacenter.name)
-      location = { datacenter: @datacenter.name, datastore: get_vm_env_datastore_name(vm), vm: vm.cid }
+      location = { datacenter: @datacenter.name, datastore: get_vm_env_datastore(vm), vm: vm.cid }
 
       if env['disks']['persistent'][director_disk_cid.raw]
         env['disks']['persistent'].delete(director_disk_cid.raw)
